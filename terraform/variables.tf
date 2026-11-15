@@ -1,11 +1,17 @@
 variable "project_name" {
   description = "Name of the cloud security project"
-  type = string
-  default = "aws-incident-response"
+  type        = string
+  default     = "aws-incident-response"
 }
 
 variable "aws_region" {
   description = "AWS Deployment region"
-  type = string
-  default = "ap-south-1"
+  type        = string
+  default     = "ap-south-1"
+}
+
+variable "environment" {
+  description = "Deplomeny environment"
+  type        = string
+  default     = "lab"
 }
