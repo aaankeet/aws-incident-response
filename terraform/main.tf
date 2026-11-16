@@ -13,14 +13,14 @@ resource "aws_cloudwatch_log_group" "incident_logs" {
 }
 
 # Lambda execution role
-resource "aws_iam_role" "incident_traige_role" {
-  name = "${var.project_name}-traige-role"
+resource "aws_iam_role" "incident_triage_role" {
+  name = "${var.project_name}-triage-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect  = "Allow",
-      Actions = "sts:AssumeRole",
-      Principle = {
+      Effect = "Allow",
+      Action = "sts:AssumeRole",
+      Principal = {
         Service = "lambda.amazonaws.com"
       }
     }]
@@ -28,10 +28,10 @@ resource "aws_iam_role" "incident_traige_role" {
 }
 
 # Permission required by the lambda to investigate
-# Lest privelege, only give permission required by lambda
+# Least-privelege permission required by lambda for investigation
 resource "aws_iam_role_policy" "incident_triage_policy" {
   name = "${var.project_name}-triage-policy"
-  role = aws_iam_role.incident_traige_role.id
+  role = aws_iam_role.incident_triage_role.id
 
   policy = jsonencode({
     Version = "2012-10-17",
@@ -56,7 +56,7 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = aws_cloudwatch_log_group.incident_logs.arn
+        Resource = "${aws_cloudwatch_log_group.incident_logs.arn}:*"
       }
     ]
   })
@@ -73,7 +73,7 @@ data "archive_file" "triage_script_zip" {
 # deploy lambda function
 resource "aws_lambda_function" "lambda_triage" {
   function_name    = "${var.project_name}-triage-function"
-  role             = aws_iam_role.incident_traige_role.arn
+  role             = aws_iam_role.incident_triage_role.arn
   runtime          = "python3.12"
   handler          = "triage.lambda_handler"
   filename         = data.archive_file.triage_script_zip.output_path
@@ -91,6 +91,10 @@ resource "aws_lambda_function" "lambda_triage" {
   depends_on = [
     aws_iam_role_policy.incident_triage_policy
   ]
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.incident_logs.name
+  }
 }
 
 # EventBridge rule for potentially risky S3 configuration changes
@@ -108,7 +112,7 @@ resource "aws_cloudwatch_event_rule" "s3_config_changes" {
       eventName = [
         "PutBucketPolicy",
         "PutBucketAcl",
-        "PutPublicAccessBlock",
+        "PutBucketPublicAccessBlock",
         "DeletePublicAccessBlock"
       ]
     }
