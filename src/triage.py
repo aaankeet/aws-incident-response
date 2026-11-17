@@ -20,7 +20,52 @@ PUBLIC_GROUPS = {
     "http://acs.amazonaws.com/groups/global/AuthenticatedUsers",
 }
 
+# risk classification function
+def classify_risk(findings):
 
+    has_public_policy = findings["public_policy"] is True
+    has_public_acl = len(findings["public_acl_grants"]) > 0
+
+    public_access_block = findings["public_access_block"]
+
+    if has_public_policy or has_public_acl:
+        return (
+            "HIGH",
+            "Potential public S3 access configuration detected"
+        )
+
+    if findings["inspection_errors"]:
+        return (
+            "REVIEW",
+            "Bucket inspection was incomplete"
+        )
+
+    if public_access_block == "Not configured":
+        return (
+            "MEDIUM",
+            "Bucket-level Public Access Block is not configured"
+        )
+
+    if isinstance(public_access_block, dict):
+        settings = [
+            "BlockPublicAcls",
+            "IgnorePublicAcls",
+            "BlockPublicPolicy",
+            "RestrictPublicBuckets",
+        ]
+
+        if not all(public_access_block.get(setting) is True for setting in settings):
+            return (
+                "MEDIUM",
+                "One or more S3 Block Public Access protections are disabled"
+            )
+
+    return (
+        "LOW",
+        "All S3 Block Public Access protections are enabled; no public policy or ACL detected"
+    )
+
+# Lambda handler function
 def lambda_handler(event,context ):
     detail = event.get('detail',{})
     request = detail.get("requestParameters",{}) or {}
@@ -89,34 +134,7 @@ def lambda_handler(event,context ):
             findings["inspection_errors"].append(f"Public access block inspection: {code}")
 
     # classify the findings
-    has_public_policy = findings["public_policy"] is True
-    has_public_acl = len(findings["public_acl_grants"]) > 0
-    public_access_block = findings["public_access_block"]
-
-    if has_public_policy or has_public_acl:
-        findings["risk_level"] = "HIGH"
-        findings["finding"] = "Potential public S3 access configuration detected"
-
-    elif findings["inspection_errors"]:
-        findings["risk_level"] = "REVIEW"
-        findings["finding"] = "Bucket inspection was incomplete"
-
-    elif findings["public_access_block"] == "Not Configured":
-        findings["risk_level"] = "MEDIUM"
-        findings["finding"] = "Bucket-level Public Access Block is not configured"
-
-    elif isinstance(public_access_block, dict) and not all([
-        public_access_block.get("BlockPublicAcls") is True,
-          public_access_block.get("IgnorePublicAcls") is True,
-          public_access_block.get("BlockPublicPolicy") is True,
-          public_access_block.get("RestrictPublicBuckets") is True,
-    ]):
-        findings["risk_level"] = "MEDIUM"
-        findings["finding"] = "One or more S3 Block Public Access protections are disabled"
-
-    else:
-        findings["risk_level"] = "LOW"
-        findings["finding"] = "All S3 Block Public Access protections are enabled; no public policy or ACL detected"
+    findings["risk_level"], findings["finding"] = classify_risk(findings)
 
     logger.info("S3 investigation result: %s", json.dumps(findings))
 
