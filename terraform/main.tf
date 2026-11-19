@@ -59,9 +59,9 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
         Resource = "${aws_cloudwatch_log_group.incident_logs.arn}:*"
       },
       {
-        Sid = "DynamoDBIncidentWrite"
-        Effect = "Allow",
-        Action ="dynamodb:PutItem",
+        Sid      = "DynamoDBIncidentWrite"
+        Effect   = "Allow",
+        Action   = "dynamodb:PutItem",
         Resource = aws_dynamodb_table.security_incidents.arn
       }
     ]
@@ -92,6 +92,7 @@ resource "aws_lambda_function" "lambda_triage" {
   environment {
     variables = {
       SNS_TOPIC_ARN = aws_sns_topic.incident_alerts.arn
+      INCIDENTS_TABLE = aws_dynamodb_table.security_incidents.name
     }
   }
   depends_on = [
