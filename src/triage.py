@@ -2,7 +2,8 @@ import os
 import json
 import boto3
 import logging
-
+import uuid
+from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 
 
@@ -11,8 +12,10 @@ logger.setLevel(logging.INFO)
 
 s3 = boto3.client("s3")
 sns = boto3.client("sns")
+dynamodb = boto3.resource("dynamodb")
 
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
+INCIDENTS_TABLE = os.environ.get("INCIDENTS_TABLE")
 
 # S3 ACL Group Identifiers
 PUBLIC_GROUPS = {
@@ -33,19 +36,16 @@ def classify_risk(findings):
             "HIGH",
             "Potential public S3 access configuration detected"
         )
-
     if findings["inspection_errors"]:
         return (
             "REVIEW",
             "Bucket inspection was incomplete"
         )
-
     if public_access_block == "Not configured":
         return (
             "MEDIUM",
             "Bucket-level Public Access Block is not configured"
         )
-
     if isinstance(public_access_block, dict):
         settings = [
             "BlockPublicAcls",
@@ -64,6 +64,34 @@ def classify_risk(findings):
         "LOW",
         "All S3 Block Public Access protections are enabled; no public policy or ACL detected"
     )
+
+# Record Incidents
+def record_incidents(findings):
+    if not INCIDENTS_TABLE:
+        logger.error("INCIDENTS_TABLE environment variable is missing")
+        raise ValueError("INCIDENTS_TABLE is not configured")
+
+    table = dynamodb.Table(INCIDENTS_TABLE)
+    incidents = {
+        "incident_id": str(uuid.uuid4()),
+        "bucket": findings["bucket"],
+        "event_name": findings["event_name"] or "Unknown",
+        "event_time": findings["event_time"] or "Unknown",
+        "actor": findings["actor"],
+        "source_ip": findings["source_ip"],
+        "risk_level": findings["risk_level"],
+        "finding": findings["finding"],
+        "status": "OPEN",
+        "remediation_status": "PENDING",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "details": findings
+    }
+
+    # Put items in the table
+    table.put_item(Item=incidents)
+    logger.info("Incident saved to DynamoDB. Incident ID: %s", incidents["incident_id"])
+    return incidents["incident_id"]
+
 
 # Lambda handler function
 def lambda_handler(event,context ):
@@ -129,20 +157,30 @@ def lambda_handler(event,context ):
         code = error.response["Error"]["Code"]
 
         if code == "NoSuchPublicAccessBlockConfiguration":
-            findings["public_access_block"] = "Not Configured"
+            findings["public_access_block"] = "Not configured"
         else:
             findings["inspection_errors"].append(f"Public access block inspection: {code}")
 
-    # classify the findings
+    # classify findings
     findings["risk_level"], findings["finding"] = classify_risk(findings)
 
     logger.info("S3 investigation result: %s", json.dumps(findings))
 
-    # notify only when the investigation identifies something to review
+    incident_id = None
+    if findings["risk_level"] != "LOW":
+        # Get the incident ID
+        incident_id = record_incidents(findings)
+
+    # notify through SNS
     if findings["risk_level"] != "LOW" and SNS_TOPIC_ARN:
+        notification = {
+            "incident_id": incident_id,
+            "findings": findings
+        }
+
         sns.publish(
             TopicArn = SNS_TOPIC_ARN,
             Subject = f"S3 Alert: {findings['risk_level']}",
-            Message = json.dumps(findings, indent=2, default=str)
+            Message = json.dumps(notification, indent=2, default=str)
         )
     return findings
