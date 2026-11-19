@@ -57,6 +57,12 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
           "logs:PutLogEvents"
         ]
         Resource = "${aws_cloudwatch_log_group.incident_logs.arn}:*"
+      },
+      {
+        Sid = "DynamoDBIncidentWrite"
+        Effect = "Allow",
+        Action ="dynamodb:PutItem",
+        Resource = aws_dynamodb_table.security_incidents.arn
       }
     ]
   })
