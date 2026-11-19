@@ -12,7 +12,7 @@ logger.setLevel(logging.INFO)
 s3 = boto3.client("s3")
 sns = boto3.client("sns")
 
-SNS_TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
+SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 
 # S3 ACL Group Identifiers
 PUBLIC_GROUPS = {
@@ -139,7 +139,7 @@ def lambda_handler(event,context ):
     logger.info("S3 investigation result: %s", json.dumps(findings))
 
     # notify only when the investigation identifies something to review
-    if findings["risk_level"] != "LOW":
+    if findings["risk_level"] != "LOW" and SNS_TOPIC_ARN:
         sns.publish(
             TopicArn = SNS_TOPIC_ARN,
             Subject = f"S3 Alert: {findings['risk_level']}",
