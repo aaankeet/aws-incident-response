@@ -63,6 +63,14 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
         Effect   = "Allow",
         Action   = "dynamodb:PutItem",
         Resource = aws_dynamodb_table.security_incidents.arn
+      },
+      {
+        Sid = "RemediateTestBucketPublicAccess",
+        Effect = "Allow",
+        Action = "s3:PutPublicAccessBlock"
+        Resource = [
+          "arn:aws:s3:::incident-response-test-001"
+        ]
       }
     ]
   })
@@ -91,7 +99,7 @@ resource "aws_lambda_function" "lambda_triage" {
   # set the lambda environment variable
   environment {
     variables = {
-      SNS_TOPIC_ARN = aws_sns_topic.incident_alerts.arn
+      SNS_TOPIC_ARN   = aws_sns_topic.incident_alerts.arn
       INCIDENTS_TABLE = aws_dynamodb_table.security_incidents.name
     }
   }
