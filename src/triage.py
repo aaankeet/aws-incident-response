@@ -93,6 +93,93 @@ def record_incidents(findings):
     return incidents["incident_id"]
 
 
+def remediate_s3_bucket(bucket, incident_id):
+    """
+    Restore all four S3 Block Public Access protections
+    and verify the resulting configuration.
+    """
+
+    logger.info("Starting remediation for bucket: %s", bucket)
+
+    try:
+        # Enable all four protections
+        s3.put_public_access_block(
+            Bucket=bucket,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            }
+        )
+
+        # Verify the configuration after remediation
+        response = s3.get_public_access_block(Bucket=bucket)
+
+        configuration = response["PublicAccessBlockConfiguration"]
+
+        settings_enabled = all([
+            configuration.get("BlockPublicAcls") is True,
+            configuration.get("IgnorePublicAcls") is True,
+            configuration.get("BlockPublicPolicy") is True,
+            configuration.get("RestrictPublicBuckets") is True,
+        ])
+
+        if settings_enabled:
+            remediation_status = "COMPLETED"
+            logger.info(
+                "Remediation successful for bucket: %s",
+                bucket
+            )
+        else:
+            remediation_status = "FAILED"
+            logger.error(
+                "Remediation verification failed for bucket: %s",
+                bucket
+            )
+
+    except ClientError:
+        remediation_status = "FAILED"
+        logger.exception(
+            "S3 remediation failed for bucket: %s",
+            bucket
+        )
+        configuration = {}
+
+    # Update the incident record in DynamoDB
+    try:
+        table = dynamodb.Table(INCIDENTS_TABLE)
+
+        table.update_item(
+            Key={"incident_id": incident_id},
+            UpdateExpression=(
+                "SET remediation_status = :remediation_status, "
+                "remediated_at = :remediated_at"
+            ),
+            ExpressionAttributeValues={
+                ":remediation_status": remediation_status,
+                ":remediated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+        logger.info(
+            "Incident %s updated with remediation status: %s",
+            incident_id,
+            remediation_status
+        )
+
+    except ClientError:
+        logger.exception(
+            "Failed to update DynamoDB incident: %s",
+            incident_id
+        )
+
+    return {
+        "remediation_status": remediation_status,
+        "verified_configuration": configuration,
+    }
+
+
 # Lambda handler function
 def lambda_handler(event,context ):
     detail = event.get('detail',{})
