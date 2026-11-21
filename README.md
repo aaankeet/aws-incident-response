@@ -284,6 +284,8 @@ aws-incident-response/
 │   └── triage.py
 │
 ├── terraform/
+│   ├── dynamodb.tf
+│   ├── outputs.tf
 │   ├── providers.tf
 │   ├── variables.tf
 │   └── main.tf
