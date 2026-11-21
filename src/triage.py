@@ -97,9 +97,15 @@ def remediate_s3_bucket(bucket, incident_id):
     """
     Restore all four S3 Block Public Access protections
     and verify the resulting configuration.
+    Also check INCIDENTS_TABLE is initialized or not.
     """
+    if not INCIDENTS_TABLE:
+        logger.error("INCIDENTS_TABLE environment variable is missing")
+        raise ValueError("INCIDENTS_TABLE is not configured")
 
     logger.info("Starting remediation for bucket: %s", bucket)
+
+    incident_update_status = "SUCCESS"
 
     try:
         # Enable all four protections
@@ -169,6 +175,7 @@ def remediate_s3_bucket(bucket, incident_id):
         )
 
     except ClientError:
+        incident_update_status = "FAILED"
         logger.exception(
             "Failed to update DynamoDB incident: %s",
             incident_id
@@ -176,7 +183,8 @@ def remediate_s3_bucket(bucket, incident_id):
 
     return {
         "remediation_status": remediation_status,
-        "verified_configuration": configuration,
+        "incident_update_status": incident_update_status,
+        "verified_configuration": configuration
     }
 
 
@@ -254,20 +262,49 @@ def lambda_handler(event,context ):
     logger.info("S3 investigation result: %s", json.dumps(findings))
 
     incident_id = None
+    remediation_result = None
+
+    # Record every non-LOW finding
     if findings["risk_level"] != "LOW":
         # Get the incident ID
         incident_id = record_incidents(findings)
 
-    # notify through SNS
-    if findings["risk_level"] != "LOW" and SNS_TOPIC_ARN:
-        notification = {
-            "incident_id": incident_id,
-            "findings": findings
-        }
+        # Automated remediation for the dedicated test bucket only
+        if (
+            findings["risk_level"] == "MEDIUM"
+            and bucket == "incident-response-test-001"
+            and isinstance(findings["public_access_block"], dict)
+            and not all(
+                findings["public_access_block"].get(setting) is True
+                for setting in [
+                    "BlockPublicAcls",
+                    "IgnorePublicAcls",
+                    "BlockPublicPolicy",
+                    "RestrictPublicBuckets"
+                ]
+            )
+        ):
+            remediation_result = remediate_s3_bucket(
+                bucket,
+                incident_id
+            )
 
-        sns.publish(
-            TopicArn = SNS_TOPIC_ARN,
-            Subject = f"S3 Alert: {findings['risk_level']}",
-            Message = json.dumps(notification, indent=2, default=str)
-        )
-    return findings
+        # Send SNS notification for every non-LOW finding
+        if findings["risk_level"] != "LOW" and SNS_TOPIC_ARN:
+            notification = {
+                "incident_id": incident_id,
+                "findings": findings,
+                "remediation": remediation_result
+            }
+
+            sns.publish(
+                TopicArn=SNS_TOPIC_ARN,
+                Subject=f"S3 Alert: {findings['risk_level']}",
+                Message=json.dumps(notification, indent=2, default=str)
+            )
+
+    return {
+        "incident_id": incident_id,
+        "findings": findings,
+         "remediation": remediation_result
+    }
