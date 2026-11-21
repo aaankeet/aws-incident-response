@@ -65,15 +65,16 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
         Resource = aws_dynamodb_table.security_incidents.arn
       },
       { # permission to update block public access
-        Sid = "RemediateTestBucketPublicAccess",
+        Sid    = "RemediateTestBucketPublicAccess",
         Effect = "Allow",
-        Action = "s3:PutPublicAccessBlock"
+        Action = "s3:PutBucketPublicAccessBlock"
         Resource = [
           "arn:aws:s3:::incident-response-test-001"
         ]
       },
       { # permission to update items
-        Sid = "UpdateIncidentRecord",
+        # This lets Lambda update the incident's remediation status after attempting the corrective action.
+        Sid    = "UpdateIncidentRecord",
         Effect = "Allow",
         Action = "dynamodb:UpdateItem",
         Resource = [
