@@ -168,7 +168,7 @@ Each non-LOW finding creates an incident record containing information such as:
 | `status` | Incident status |
 | `remediation_status` | Remediation outcome |
 | `created_at` | Incident creation timestamp |
-| `remediated_at` or `remediation_attempted_at` | Remediation timestamp, depending on the deployed code version |
+| `remediation_attempted_at` | Remediation timestamp |
 
 DynamoDB uses on-demand billing for this project.
 
@@ -281,15 +281,12 @@ Use a dedicated test bucket. Follow the controlled remediation test described ab
 aws-incident-response/
 │
 ├── src/
-│   ├── __init__.py
 │   └── triage.py
 │
 ├── terraform/
 │   ├── providers.tf
 │   ├── variables.tf
 │   └── main.tf
-│
-├── test_triage.py
 │
 └── README.md
 ```
