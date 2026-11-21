@@ -293,7 +293,6 @@ aws-incident-response/
 └── README.md
 ```
 
-*Adjust the structure above if your actual repository contains additional or differently named Terraform files.*
 
 ## IAM Security and Least Privilege
 
