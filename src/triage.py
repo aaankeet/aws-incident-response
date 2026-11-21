@@ -160,11 +160,11 @@ def remediate_s3_bucket(bucket, incident_id):
             Key={"incident_id": incident_id},
             UpdateExpression=(
                 "SET remediation_status = :remediation_status, "
-                "remediated_at = :remediated_at"
+                "remediation_attempted_at = :remediation_attempted_at"
             ),
             ExpressionAttributeValues={
                 ":remediation_status": remediation_status,
-                ":remediated_at": datetime.now(timezone.utc).isoformat(),
+                ":remediation_attempted_at": datetime.now(timezone.utc).isoformat(),
             }
         )
 
