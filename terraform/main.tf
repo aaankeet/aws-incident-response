@@ -36,7 +36,7 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      {
+      { # permission to get bucket config details
         Effect = "Allow",
         Action = [
           "s3:GetBucketPolicyStatus",
@@ -45,12 +45,12 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
         ]
         Resource = "arn:aws:s3:::*"
       },
-      {
+      { # permission to publish sns notification
         Effect   = "Allow",
         Action   = "sns:Publish",
         Resource = aws_sns_topic.incident_alerts.arn
       },
-      {
+      { # permission to write logs in cloudwatch log group
         Effect = "Allow",
         Action = [
           "logs:CreateLogStream",
@@ -58,18 +58,26 @@ resource "aws_iam_role_policy" "incident_triage_policy" {
         ]
         Resource = "${aws_cloudwatch_log_group.incident_logs.arn}:*"
       },
-      {
+      { # permission to write to DynamoDB table
         Sid      = "DynamoDBIncidentWrite"
         Effect   = "Allow",
         Action   = "dynamodb:PutItem",
         Resource = aws_dynamodb_table.security_incidents.arn
       },
-      {
+      { # permission to update block public access
         Sid = "RemediateTestBucketPublicAccess",
         Effect = "Allow",
         Action = "s3:PutPublicAccessBlock"
         Resource = [
           "arn:aws:s3:::incident-response-test-001"
+        ]
+      },
+      { # permission to update items
+        Sid = "UpdateIncidentRecord",
+        Effect = "Allow",
+        Action = "dynamodb:UpdateItem",
+        Resource = [
+          aws_dynamodb_table.security_incidents.arn
         ]
       }
     ]
