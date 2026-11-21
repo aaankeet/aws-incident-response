@@ -227,8 +227,8 @@ Terraform provisions the AWS infrastructure, including the Lambda execution role
 ### 1. Clone the Repository
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd <YOUR_PROJECT_DIRECTORY>
+git clone <https://github.com/aaankeet/aws-incident-response>
+cd <aws-incident-response>
 ```
 
 ### 2. Configure AWS Credentials
